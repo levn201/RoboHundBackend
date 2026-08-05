@@ -3,7 +3,9 @@ DETECTION_INTERVAL = 0.4      # Sekunden zwischen Analysen (~2.5x/Sek)
 SESSION_END_BUFFER = 5.0      # Sekunden ohne Person, bis Session als beendet gilt
 CONFIDENCE_THRESHOLD = 0.5
 
-SNAPSHOT_DIR = "snapshots"
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SNAPSHOT_DIR = os.path.join(BASE_DIR, "snapshots")
 DATABASE_PATH = "watchdog.db"
 
 FRAME_WIDTH = 1280
