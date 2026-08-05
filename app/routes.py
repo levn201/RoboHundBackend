@@ -1,13 +1,18 @@
 import time
 
 import cv2
-from flask import Blueprint, Response, current_app, jsonify, send_from_directory
+from flask import Blueprint, Response, current_app, jsonify, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 
 from config import SNAPSHOT_DIR
 from . import gps, models
 
 bp = Blueprint("api", __name__)
+
+
+@bp.route("/")
+def index():
+    return render_template("index.html")
 
 
 @bp.route("/api/events")

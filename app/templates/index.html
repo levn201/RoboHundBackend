@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watchdog Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  #map { height: 20rem; }
+</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+  <header class="border-b border-slate-800 px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+    <h1 class="text-xl font-semibold">🐾 Watchdog Dashboard</h1>
+    <div id="banner" class="hidden items-center gap-2 rounded-full bg-red-600 px-4 py-1.5 text-sm font-medium animate-pulse">
+      <span id="banner-text"></span>
+    </div>
+  </header>
+
+  <main class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+    <section class="bg-slate-900 rounded-lg p-4 space-y-2">
+      <h2 class="text-lg font-medium text-slate-300">Live-Stream</h2>
+      <img src="/stream" alt="Live-Stream" class="w-full rounded-md bg-black">
+    </section>
+
+    <section class="bg-slate-900 rounded-lg p-4 space-y-2">
+      <h2 class="text-lg font-medium text-slate-300">Letzte Erkennung</h2>
+      <div id="latest-event" class="flex flex-col sm:flex-row gap-3 items-start">
+        <p class="text-slate-400">Lade...</p>
+      </div>
+    </section>
+
+    <section class="bg-slate-900 rounded-lg p-4 space-y-2">
+      <h2 class="text-lg font-medium text-slate-300">Position</h2>
+      <div id="map" class="rounded-md"></div>
+    </section>
+
+    <section class="bg-slate-900 rounded-lg p-4 space-y-2">
+      <h2 class="text-lg font-medium text-slate-300">Letzte Events</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="py-1 pr-2">Zeitpunkt</th>
+              <th class="py-1 pr-2">Confidence</th>
+              <th class="py-1 pr-2">Dauer</th>
+              <th class="py-1">Snapshot</th>
+            </tr>
+          </thead>
+          <tbody id="events-body">
+            <tr><td colspan="4" class="py-2 text-slate-400">Lade...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+<script>
+const DUMMY_LAT = 48.7758;
+const DUMMY_LON = 9.1829;
+
+const map = L.map('map').setView([DUMMY_LAT, DUMMY_LON], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 19,
+}).addTo(map);
+const marker = L.marker([DUMMY_LAT, DUMMY_LON]).addTo(map);
+let markerPosition = { lat: DUMMY_LAT, lon: DUMMY_LON };
+
+function formatTimestamp(isoString) {
+  try {
+    return new Date(isoString).toLocaleString('de-DE');
+  } catch {
+    return isoString;
+  }
+}
+
+function secondsAgo(isoString) {
+  const then = new Date(isoString).getTime();
+  if (Number.isNaN(then)) return Infinity;
+  return Math.floor((Date.now() - then) / 1000);
+}
+
+function renderLatestEvent(event) {
+  const container = document.getElementById('latest-event');
+
+  if (!event) {
+    container.innerHTML = '<p class="text-slate-400">Noch keine Erkennung</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <img src="/snapshots/${encodeURIComponent(event.snapshot_path)}" alt="Letzter Snapshot"
+         class="w-full sm:w-48 rounded-md border border-slate-800">
+    <div>
+      <p class="text-slate-200">${formatTimestamp(event.timestamp)}</p>
+      <p class="text-slate-400 text-sm">Confidence: ${(event.confidence * 100).toFixed(0)}%</p>
+    </div>
+  `;
+}
+
+function renderBanner(event) {
+  const banner = document.getElementById('banner');
+  const bannerText = document.getElementById('banner-text');
+
+  if (event && secondsAgo(event.timestamp) < 60) {
+    bannerText.textContent = `Person erkannt vor ${secondsAgo(event.timestamp)}s`;
+    banner.classList.remove('hidden');
+    banner.classList.add('flex');
+  } else {
+    banner.classList.add('hidden');
+    banner.classList.remove('flex');
+  }
+}
+
+function renderEventsTable(events) {
+  const body = document.getElementById('events-body');
+
+  if (!events || events.length === 0) {
+    body.innerHTML = '<tr><td colspan="4" class="py-2 text-slate-400">Noch keine Events</td></tr>';
+    return;
+  }
+
+  body.innerHTML = events.map(event => `
+    <tr class="border-b border-slate-800/60">
+      <td class="py-1 pr-2 whitespace-nowrap">${formatTimestamp(event.timestamp)}</td>
+      <td class="py-1 pr-2">${(event.confidence * 100).toFixed(0)}%</td>
+      <td class="py-1 pr-2">${event.session_duration != null ? event.session_duration.toFixed(1) + 's' : '-'}</td>
+      <td class="py-1">
+        <a href="/snapshots/${encodeURIComponent(event.snapshot_path)}" target="_blank" class="inline-block">
+          <img src="/snapshots/${encodeURIComponent(event.snapshot_path)}" alt="Snapshot"
+               class="h-10 w-10 object-cover rounded border border-slate-800">
+        </a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateMapMarker(lat, lon) {
+  if (lat == null || lon == null) return;
+  if (lat === markerPosition.lat && lon === markerPosition.lon) return;
+
+  markerPosition = { lat, lon };
+  marker.setLatLng([lat, lon]);
+  map.panTo([lat, lon]);
+}
+
+async function refreshLatestEvent() {
+  try {
+    const res = await fetch('/api/events/latest');
+    if (res.status === 404) {
+      renderLatestEvent(null);
+      renderBanner(null);
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const event = await res.json();
+    renderLatestEvent(event);
+    renderBanner(event);
+  } catch (err) {
+    document.getElementById('latest-event').innerHTML =
+      '<p class="text-slate-500">Keine Verbindung zum Server</p>';
+  }
+}
+
+async function refreshEvents() {
+  try {
+    const res = await fetch('/api/events');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const events = await res.json();
+    renderEventsTable(events);
+  } catch (err) {
+    document.getElementById('events-body').innerHTML =
+      '<tr><td colspan="4" class="py-2 text-slate-500">Keine Verbindung zum Server</td></tr>';
+  }
+}
+
+async function refreshStatus() {
+  try {
+    const res = await fetch('/api/status');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const status = await res.json();
+    const pos = status.last_gps_position || {};
+    updateMapMarker(pos.lat, pos.lon);
+  } catch (err) {
+    // Karte bleibt einfach auf der letzten bekannten Position stehen.
+  }
+}
+
+function refreshAll() {
+  refreshLatestEvent();
+  refreshEvents();
+  refreshStatus();
+}
+
+refreshAll();
+setInterval(refreshAll, 5000);
+</script>
+
+</body>
+</html>
