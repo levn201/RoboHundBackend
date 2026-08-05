@@ -1,6 +1,7 @@
 import time
 
-from flask import Blueprint, current_app, jsonify, send_from_directory
+import cv2
+from flask import Blueprint, Response, current_app, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 
 from config import SNAPSHOT_DIR
@@ -35,6 +36,37 @@ def api_status():
         "uptime_seconds": round(time.time() - start_time, 1),
         "last_gps_position": {"lat": lat, "lon": lon},
     })
+
+
+def _generate_stream():
+    camera_stream = current_app.config.get("CAMERA_STREAM")
+
+    while True:
+        frame = camera_stream.get_frame() if camera_stream else None
+
+        if frame is None:
+            time.sleep(0.1)
+            continue
+
+        ok, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if not ok:
+            time.sleep(0.1)
+            continue
+
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
+        )
+
+        time.sleep(0.1)
+
+
+@bp.route("/stream")
+def stream():
+    return Response(
+        _generate_stream(),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
 
 
 @bp.route("/snapshots/<filename>")
