@@ -38,9 +38,7 @@ def api_status():
     })
 
 
-def _generate_stream():
-    camera_stream = current_app.config.get("CAMERA_STREAM")
-
+def _generate_stream(camera_stream):
     while True:
         frame = camera_stream.get_frame() if camera_stream else None
 
@@ -63,8 +61,9 @@ def _generate_stream():
 
 @bp.route("/stream")
 def stream():
+    camera_stream = current_app.config.get("CAMERA_STREAM")
     return Response(
-        _generate_stream(),
+        _generate_stream(camera_stream),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
