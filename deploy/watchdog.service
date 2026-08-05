@@ -1,0 +1,17 @@
+[Unit]
+Description=Watchdog Personenerkennung
+After=network.target
+
+[Service]
+Type=simple
+User=tnbw
+WorkingDirectory=/home/tnbw/watchdog
+Environment=PATH=/home/tnbw/watchdog/venv/bin
+ExecStart=/home/tnbw/watchdog/venv/bin/python /home/tnbw/watchdog/run.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
